@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.*
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.setFragmentResultListener
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -27,6 +28,7 @@ class TaskFragment : Fragment(R.layout.fragment_task), TasksAdapter.OnItemClickL
 
 
     private val viewModel: TaskViewModel by viewModels()
+    private lateinit var searchView: SearchView
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -86,12 +88,28 @@ class TaskFragment : Fragment(R.layout.fragment_task), TasksAdapter.OnItemClickL
                     }
                     is TaskViewModel.TasksEvent.NavigateToEditTaskScreen -> {
                         val action =
-                            TaskFragmentDirections.actionTaskFragment2ToAddEditTaskFragment(event.task, "Edit Task")
+                            TaskFragmentDirections.actionTaskFragment2ToAddEditTaskFragment(
+                                event.task,
+                                "Edit Task"
+                            )
                         findNavController().navigate(action)
+                    }
+                    TaskViewModel.TasksEvent.NavigateToDeleteAllCompletedScreen -> {
+                        val action =
+                            TaskFragmentDirections.actionGlobalDeleteAllCompletedDialogFragment()
+                        findNavController().navigate(action)
+                    }
+                    is TaskViewModel.TasksEvent.ShowTaskSavedConfirmationMessage -> {
+                        Snackbar.make(requireView(), event.msg, Snackbar.LENGTH_SHORT).show()
                     }
                 }.exhaustive
 
             }
+        }
+
+        setFragmentResultListener("add_edit_request") { _, bundle ->
+            val result = bundle.getInt("add_edit_result")
+            viewModel.onAddEditResult(result)
         }
         setHasOptionsMenu(true)
     }
@@ -100,7 +118,13 @@ class TaskFragment : Fragment(R.layout.fragment_task), TasksAdapter.OnItemClickL
         inflater.inflate(R.menu.menu_fragment_task, menu)
 
         val searchItem = menu.findItem(R.id.action_search)
-        val searchView = searchItem.actionView as SearchView
+        searchView = searchItem.actionView as SearchView
+
+        val pendingQuery = viewModel.searchQuery.value
+        if (pendingQuery != null && pendingQuery.isNotEmpty()) {
+            searchItem.expandActionView()
+            searchView.setQuery(pendingQuery, false)
+        }
 
         searchView.onQueryTextChanged {
             viewModel.searchQuery.value = it
@@ -135,7 +159,16 @@ class TaskFragment : Fragment(R.layout.fragment_task), TasksAdapter.OnItemClickL
                 viewModel.onHideCompleted(item.isChecked)
                 true
             }
+            R.id.action_hide_completed_task -> {
+                viewModel.onDeleteAllCompletedClick()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        searchView.setOnQueryTextListener(null)
     }
 }
